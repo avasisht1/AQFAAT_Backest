@@ -10,6 +10,12 @@ from nautilus_trader.model.objects import Quantity
 from nautilus_trader.model.position import Position
 from nautilus_trader.trading.strategy import Strategy, StrategyConfig
 
+'''
+This file is a direct copy-paste from the Nautilus Trader documentation, and
+will serve as a template that I'm using to learn how to implement my own
+strategy in nautilus_rsi_strat.py
+'''
+
 
 class MACDConfig(StrategyConfig):
     instrument_id: InstrumentId

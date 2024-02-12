@@ -12,6 +12,14 @@ from nautilus_trader.model.objects import Quantity
 from nautilus_trader.model.position import Position
 from nautilus_trader.trading.strategy import Strategy, StrategyConfig
 
+'''
+This file started as a copy of the code from the same source as
+nautilus_learn.py and I've been trying to change it so that it fits my needs.
+Eventually the hope is that this code will replace the code in backtest.py
+in which I have implemented the indicators and the strategy by hand using just
+pandas.
+'''
+
 
 class Low5_RSI2_Config(StrategyConfig):
     instrument_id: InstrumentId
