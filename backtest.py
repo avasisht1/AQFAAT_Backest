@@ -329,10 +329,10 @@ def run_test(df, name, init_capital=1000, plot_ohlc_rsi=False, plot_equity=False
         pd.DataFrame: Dataframe with the additional columns acquired by apply_strat
     """
     
+    out, tdim, n, nrt, final = apply_strat(df, init_capital)
+    
     if plot_ohlc_rsi:
         plot_candlestick_rsi(df)
-    
-    out, tdim, n, nrt, final = apply_strat(df, init_capital)
     
     print("Strategy Name: {}\n\tTime in Market: {}/{} = {}%\n\tFinal Capital: {}"\
           .format(name, tdim, n, 100 * tdim / n, final))
@@ -348,6 +348,5 @@ def run_test(df, name, init_capital=1000, plot_ohlc_rsi=False, plot_equity=False
     return df
 
 
-run_test(snp, "S&P 500 RSI2, Low5")
-
+run_test(snp, "S&P 500 RSI2, Low5", 1000, True)
 
