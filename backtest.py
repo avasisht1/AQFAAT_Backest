@@ -153,7 +153,10 @@ def plot_equity_line(df, name='', col='Equity'):
     plt.show()
 
 
-def apply_strat(dataframe, init_capital, low_pd, rsi_pd, max_dim):
+def apply_strat(dataframe, init_capital, low_pd, rsi_pd, rsi_threshold, max_dim):
+    calculate_rsi(dataframe, column="Close", window=rsi_pd)
+    calculate_nday_low(dataframe, column="Low", n=low_pd)
+    
     n = len(dataframe["Close"])
     total_days_in_market = 0
     num_round_trips = 0
@@ -162,23 +165,23 @@ def apply_strat(dataframe, init_capital, low_pd, rsi_pd, max_dim):
     days_in_market = 0
     equity_line = [init_capital for _ in range(n)]
     action = ["None" for _ in range(n)]
-    for i in range(5, n):
+    for i in range(max(low_pd, rsi_pd), n):
         curr_close = dataframe["Close"][i]
-        curr_low = dataframe["Low_5"][i-1]
-        curr_rsi = dataframe["RSI_2"][i]
+        curr_low = dataframe["Low_"+str(low_pd)][i-1]
+        curr_rsi = dataframe["RSI_"+str(rsi_pd)][i]
         if not in_market:
             if curr_close < curr_low:
                 in_market = True
                 action[i] = "Enter"
         else: # in_market
             curr_capital *= curr_close/dataframe["Close"][i-1]
-            if curr_rsi > 50 or days_in_market == 5:
+            if curr_rsi > rsi_threshold or days_in_market == max_dim:
                 in_market = False
                 action[i] = "Exit"
                 total_days_in_market += days_in_market
                 days_in_market = 0
                 num_round_trips += 1
-            else: # curr_rsi <= 50 and days_in_market < 5
+            else: # curr_rsi <= rsi_threshold and days_in_market < max_dim
                 days_in_market += 1
         equity_line[i] = curr_capital
     dataframe["Equity"] = equity_line
@@ -212,8 +215,6 @@ compare_data_column(gbp_dollar, gbp_dollar2, column=["Close", "Close/Last"])
 '''
 
 def run_test(df, name, plot_ohlc_rsi=False, plot_equity=False, plot_buy_hold=False):
-    calculate_rsi(df, column="Close", window=2)
-    calculate_nday_low(df)
     
     if plot_ohlc_rsi:
         plot_candlestick_rsi(df)
