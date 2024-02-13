@@ -5,6 +5,7 @@ import matplotlib.dates as mdates
 from mplfinance.original_flavor import candlestick_ohlc
 from nautilus_trader.indicators.rsi import RelativeStrengthIndex
 from nautilus_trader.indicators.average.moving_average import MovingAverageType
+import itertools
 
 euro_dollar = pd.read_csv('EUR_USD Historical Data.csv').drop(["Vol.", "Change %"], axis=1)[::-1]
 aud_dollar = pd.read_csv('AUD_USD Historical Data.csv').drop(["Vol.", "Change %"], axis=1)[::-1]
@@ -119,10 +120,10 @@ def calculate_rsi(dataframe, column='Close', window=14):
 
     # Calculate relative strength (RS) and RSI
     rsi = [0 for _ in range(len(dataframe[column]))]
-    try:
+    if avg_losses[window] != 0:
         rs0 = avg_gains[window] / avg_losses[window]
         rsi0 = 100 - (100 / (1 + rs0))
-    except:
+    else:
         rsi0 = 100
     
     for i in range(len(dataframe[column])):
@@ -133,10 +134,10 @@ def calculate_rsi(dataframe, column='Close', window=14):
         else: # i > window
             avg_gains[i] = (avg_gains[i-1]*(window-1) + gains[i])/window
             avg_losses[i] = (avg_losses[i-1]*(window-1) + losses[i])/window
-            try:
+            if avg_losses[i] != 0:
                 rs = avg_gains[i]/avg_losses[i]
                 rsi[i] = 100 - (100 / (1 + rs))
-            except:
+            else:
                 rsi[i] = 100
                 
     dataframe["Avg_gains"] = avg_gains
@@ -348,5 +349,38 @@ def run_test(df, name, init_capital=1000, plot_ohlc_rsi=False, plot_equity=False
     return df
 
 
-run_test(snp, "S&P 500 RSI2, Low5", 1000, True)
+#run_test(snp, "S&P 500 RSI2, Low5", 1000, True)
+opt_universe = {"low_pd":[3,6,2], "rsi_pd":[2,5,2], "rsi_threshold":[40,61,20], "max_dim":[5,6,1]}
+
+def create_table(univ):
+    param_ranges = [range(*univ[x]) for x in univ]
+    combos = []
+    for combo in itertools.product(*param_ranges):
+        combos.append(combo)
+    values = pd.DataFrame(combos)
+    values.columns = univ.keys()
+    return values
+
+def optimize_strat(df, values, init_capital=1000):
+    n = values.shape[0]
+    names = values.columns
+    values['Days in Market'] = [0 for i in range(n)]
+    values['In-market pct'] = [0.0 for i in range(n)]
+    values['# Rnd Trips'] = [0 for i in range(n)]
+    values['Result'] = [0.0 for i in range(n)]
+    for i in range(n):
+        combo = list(values[names].iloc[i])
+        df, tdim, n, nrt, result = apply_strat(df, init_capital, *combo)
+        values.loc[i, 'Result'] = result
+        values.loc[i, 'Days in Market'] = tdim
+        values.loc[i, 'In-market pct'] = 100*tdim/n
+        values.loc[i, '# Rnd Trips'] = nrt
+    best_values = np.where(values['Result']==max(values['Result']))
+    print("Best Result: {} from the following parameters".format(max(values['Result'])))
+    for val in best_values:
+        print(values[names].iloc[val])
+    return values
+        
+values = create_table(opt_universe)
+optimize_strat(aud_dollar, values)
 
