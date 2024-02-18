@@ -65,6 +65,7 @@ def get_data_av(currency_pair, size, data_type='FX_INTRADAY',
     df.columns = ["timestamp", "open", "high", "low", "close"]
     df.index = pd.core.indexes.datetimes.DatetimeIndex(df['timestamp'])
     df = df.drop('timestamp', axis=1)
+    df.sort_index()
     
     return df
 
@@ -94,6 +95,7 @@ def get_data_yf(tickers, interval, period, *args):
     df.columns = ["timestamp", "open", "high", "low", "close"]
     df.index = pd.core.indexes.datetimes.DatetimeIndex(df['timestamp'])
     df = df.drop('timestamp', axis=1)
+    df.sort_index()
     return df
 
 #euro_dollar_compact_1d = get_data_av(('EUR','USD'), "compact", 'FX_DAILY', '1d')

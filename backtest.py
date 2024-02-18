@@ -36,7 +36,7 @@ def validate_data(dataframe, error_code="Date"):
         if dataframe["High"][i] < dataframe["Low"][i]:
             print("Bad data at {}".format(dataframe[error_code]))
 
-            
+
 def compare_data_column(df1, df2, column=["Open", "Open"], error_code="Date"):
     """
     Makes sure that two dataframes of historical data have the same data.
@@ -56,6 +56,7 @@ def compare_data_column(df1, df2, column=["Open", "Open"], error_code="Date"):
     Returns:
         None, but prints to the console
     """
+    
     n1 = len(df1[column[0]])
     n2 = len(df2[column[1]])
     n = min(n1, n2)
@@ -64,6 +65,17 @@ def compare_data_column(df1, df2, column=["Open", "Open"], error_code="Date"):
         idx2 = n2 - i
         if df1[column[0]][idx1] != df2[column[1]][idx2]:
             print("Conflicting Data at {} / {}".format(df1[error_code], df2[error_code]))
+    
+
+def hourly_to_daily(hourly_ohlc):
+    daily = pd.DataFrame(
+    {'Open': hourly_ohlc['Open'].resample('24h').first(),
+    'High': hourly_ohlc['High'].resample('24h').max(),
+    'Low': hourly_ohlc['Low'].resample('24h').min(),
+    'Close': hourly_ohlc['Close'].resample('24h').last()}
+    ).dropna()
+    
+    return daily
 
 
 def calculate_nday_low(dataframe, column='Low', n=5):
@@ -345,6 +357,7 @@ def run_test(df, name, init_capital=1000, plot_ohlc_rsi=False, plot_equity=False
     
     return df
 
-euro_dollar_compact_1d = get_data_av(('EUR','USD'), "full", 'FX_DAILY', '1d')
-euro_dollar_compact_1d.columns = ['Open', 'High', 'Low', 'Close']
-run_test(euro_dollar_compact_1d, "EUR/USD RSI2, Low5", 1_000_000, False)
+
+#euro_dollar_compact_1h = get_data_av(('EUR','USD'), "full", 'FX_HOURLY', '60min')[::-1]
+#euro_dollar_compact_1h.columns = ['Open', 'High', 'Low', 'Close']
+#run_test(euro_dollar_compact_1d, "EUR/USD RSI2, Low5", 1_000_000, False)
