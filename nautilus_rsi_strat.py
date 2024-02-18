@@ -1,8 +1,9 @@
 from nautilus_trader.core.message import Event
 from nautilus_trader.indicators.rsi import RelativeStrengthIndex
-from nautilus_trader.indicators.donchian_channel import DonchianChannels
+from nautilus_trader.indicators.donchian_channel import DonchianChannel
 from nautilus_trader.indicators.average.moving_average import MovingAverageType
-from nautilus_trader.model.data import QuoteTick
+from nautilus_trader.model.data import Bar
+from nautilus_trader.model.data import BarType
 from nautilus_trader.model.enums import PriceType
 from nautilus_trader.model.enums import PositionSide
 from nautilus_trader.model.enums import OrderSide
@@ -11,6 +12,7 @@ from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.objects import Quantity
 from nautilus_trader.model.position import Position
 from nautilus_trader.trading.strategy import Strategy, StrategyConfig
+from decimal import Decimal
 
 '''
 This file started as a copy of the code from the same source as
@@ -21,60 +23,66 @@ pandas.
 '''
 
 
-class Low5_RSI2_Config(StrategyConfig):
+class LowX_RSIY_Config(StrategyConfig):
     instrument_id: InstrumentId
-    period: int = 2
-    ma_type: int = MovingAverageType.SIMPLE
-    low_period: int = 5
-    days_in_market: int = 0
-    trade_size: int = 100_000
-    #entry_threshold: float = 0.00010
+    bar_type: BarType
+    rsi_period: int
+    ma_type: MovingAverageType
+    low_period: int
+    max_days_in_market: int
+    trade_size: Decimal
 
 
-class Low5_RSI2_Strategy(Strategy):
-    def __init__(self, config: Low5_RSI2_Config) -> None:
+class LowX_RSIY_Strategy(Strategy):
+    def __init__(self, config: LowX_RSIY_Config) -> None:
         super().__init__(config=config)
         # Our "trading signal"
         self.rsi = RelativeStrengthIndex(
-            period=config.period,
+            period=config.rsi_period,
             ma_type=config.ma_type
         )
         # We copy some config values onto the class to make them easier to reference later on
-        self.low5 = DonchianChannels(5).lower
+        self.donch = DonchianChannel(config.low_period)
         #self.entry_threshold = config.entry_threshold
         self.instrument_id = config.instrument_id
         self.trade_size = Quantity.from_int(config.trade_size)
-
+        self.bar_type = config.bar_type
+        self.days_in_market = 0
+        
         # Convenience
         self.position: Position | None = None
 
     def on_start(self):
-        self.subscribe_quote_ticks(instrument_id=self.instrument_id)
+        self.subscribe_bars(self.bar_type)
+        self.register_indicator_for_bars(self.bar_type, self.rsi)
+        self.register_indicator_for_bars(self.bar_type, self.donch)
 
     def on_stop(self):
         self.close_all_positions(self.instrument_id)
-        self.unsubscribe_quote_ticks(instrument_id=self.instrument_id)
+        self.unsubscribe_bars(self.bar_type)
 
-    def on_quote_tick(self, tick: QuoteTick):
+    def on_bar(self, bar: Bar):
         # You can register indicators to receive quote tick updates automatically,
         # here we manually update the indicator to demonstrate the flexibility available.
-        self.rsi.handle_quote_tick(tick)
-        self.low5.handle_quote_tick(tick)
+        print('\n\n RSI = {}\n\n'.format(self.rsi.value()))
+        print('\n\n Low = {}\n\n'.format(self.donch.low))
+        self.rsi.handle_bar(bar)
+        self.donch.handle_bar(bar)
 
-        if not self.rsi.initialized or not self.low5.initialized:
+        if not self.rsi.initialized or not self.donch.initialized:
             return  # Wait for indicator to warm up
         
         # self._log.info(f"{self.macd.value=}:%5d")
-        self.check_for_entry()
+        self.check_for_entry(bar.close)
         self.check_for_exit()
 
     def on_event(self, event):
         if isinstance(event, PositionOpened):
             self.position = self.cache.position(event.position_id)
 
-    def check_for_entry(self):
+    def check_for_entry(self, close):
         # If MACD line is above our entry threshold, we should be LONG
-        if self.low5 < 25:# FIGURE OUT HOW TO GET THE 5-DAY LOW
+        if close < self.donch.lower: # 5-DAY LOW
             if self.position and self.position.side == PositionSide.LONG:
                 self.days_in_market += 1
                 return  # Already LONG
@@ -101,13 +109,15 @@ class Low5_RSI2_Strategy(Strategy):
 
     def check_for_exit(self):
         # If MACD line is above zero then exit if we are SHORT
-        if self.rsi.value >= 50.0 or self.days_in_market == 5:
+        if self.rsi.value >= 50.0 or self.days_in_market == self.config.max_days_in_market:
             if self.position and self.position.side == PositionSide.LONG:
                 self.close_position(self.position)
         # If MACD line is below zero then exit if we are LONG
+        '''
         else:
             if self.position and self.position.side == PositionSide.LONG:
                 self.close_position(self.position)
+        '''
 
     def on_dispose(self):
         pass  # Do nothing else

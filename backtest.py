@@ -3,21 +3,18 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from mplfinance.original_flavor import candlestick_ohlc
-from nautilus_trader.indicators.rsi import RelativeStrengthIndex
-from nautilus_trader.indicators.average.moving_average import MovingAverageType
-import itertools
+from data_puller import get_data_av, get_data_yf
 
-euro_dollar = pd.read_csv('EUR_USD Historical Data.csv').drop(["Vol.", "Change %"], axis=1)[::-1]
-aud_dollar = pd.read_csv('AUD_USD Historical Data.csv').drop(["Vol.", "Change %"], axis=1)[::-1]
-gbp_dollar = pd.read_csv('GBP_USD Historical Data.csv').drop(["Vol.", "Change %"], axis=1)[::-1]
+'''
+euro_dollar = pd.read_csv('Old/EUR_USD.csv').drop(["Vol.", "Change %"], axis=1)[::-1]
+aud_dollar = pd.read_csv('Old/AUD_USD.csv').drop(["Vol.", "Change %"], axis=1)[::-1]
+gbp_dollar = pd.read_csv('Old/GBP_USD.csv').drop(["Vol.", "Change %"], axis=1)[::-1]
 snp = pd.read_csv('SPX.csv').drop(['Adj Close', 'Volume'], axis=1)
 
 euro_dollar.index = [i for i in range(len(euro_dollar))]
 aud_dollar.index = [i for i in range(len(aud_dollar))]
 gbp_dollar.index = [i for i in range(len(gbp_dollar))]
-
-rsi2 = RelativeStrengthIndex(2, ma_type=MovingAverageType.SIMPLE)
-
+'''
 
 def validate_data(dataframe, error_code="Date"):
     """
@@ -115,8 +112,8 @@ def calculate_rsi(dataframe, column='Close', window=14):
     losses = -delta.where(delta < 0, 0)
 
     # Calculate average gains and losses over the specified window
-    avg_gains = gains.rolling(window=window).mean()
-    avg_losses = losses.rolling(window=window).mean()
+    avg_gains = list(gains.rolling(window=window).mean())
+    avg_losses = list(losses.rolling(window=window).mean())
 
     # Calculate relative strength (RS) and RSI
     rsi = [0 for _ in range(len(dataframe[column]))]
@@ -348,74 +345,6 @@ def run_test(df, name, init_capital=1000, plot_ohlc_rsi=False, plot_equity=False
     
     return df
 
-
-#run_test(snp, "S&P 500 RSI2, Low5", 1000, True)
-opt_universe = {"low_pd":[3,6,2], "rsi_pd":[2,5,2], "rsi_threshold":[40,61,20], "max_dim":[5,6,1]}
-
-def create_table(univ):
-    """
-    Creates a table of all the possible hyperparameter values.
-    
-    Given a dictionary with the hyperparameter names and an indexable object 
-    containing 3 numbers, generates a table where each row is one combination of
-    the hyperparameters. The numbers are interpreted int he same way as in a 
-    slice or range object with the interval [start, end) being the first two, 
-    and the third being the increment.
-
-    Parameters:
-        - univ (dict): The dictionary
-
-    Returns:
-        pd.DataFrame: Dataframe with one row per combination of hyperparameter values
-    """
-    
-    param_ranges = [range(*univ[x]) for x in univ]
-    combos = []
-    for combo in itertools.product(*param_ranges):
-        combos.append(combo)
-    values = pd.DataFrame(combos)
-    values.columns = univ.keys()
-    return values
-
-def optimize_strat(df, values, init_capital=1000):
-    """
-    Finds the best set of hyperparameter values as well as statistics about the
-    various combinations
-    
-    Given a dataframe with historical data, a table of values, and optionally an
-    amount of initial capital, implements the strategy from apply_strat with
-    all the combinations of the hyperparameters, updates the values dataframe
-    with relevant statistics, and prints the best combination to the console.
-
-    Parameters:
-        - df (pd.DataFrame): The dataframe of historical data
-        - values (pd.DataFrame): The values table
-        - [init_capital] (float): The starting capital for the strategy
-
-    Returns:
-        pd.DataFrame: Dataframe with one row per combination of hyperparameter,
-        now with relevant statistics
-    """
-    
-    n = values.shape[0]
-    names = values.columns
-    values['Days in Market'] = [0 for i in range(n)]
-    values['In-market pct'] = [0.0 for i in range(n)]
-    values['# Rnd Trips'] = [0 for i in range(n)]
-    values['Result'] = [0.0 for i in range(n)]
-    for i in range(n):
-        combo = list(values[names].iloc[i])
-        df, tdim, n, nrt, result = apply_strat(df, init_capital, *combo)
-        values.loc[i, 'Result'] = result
-        values.loc[i, 'Days in Market'] = tdim
-        values.loc[i, 'In-market pct'] = 100*tdim/n
-        values.loc[i, '# Rnd Trips'] = nrt
-    best_values = np.where(values['Result']==max(values['Result']))
-    print("Best Result: {} from the following parameters".format(max(values['Result'])))
-    for val in best_values:
-        print(values[names].iloc[val])
-    return values
-        
-values = create_table(opt_universe)
-optimize_strat(aud_dollar, values)
-
+euro_dollar_compact_1d = get_data_av(('EUR','USD'), "full", 'FX_DAILY', '1d')
+euro_dollar_compact_1d.columns = ['Open', 'High', 'Low', 'Close']
+run_test(euro_dollar_compact_1d, "EUR/USD RSI2, Low5", 1_000_000, False)
