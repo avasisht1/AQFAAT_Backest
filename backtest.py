@@ -210,7 +210,7 @@ def plot_equity_line(df, name='', col='Equity'):
     """
     
     plt.figure(figsize=(10, 6))
-    plt.plot(df['Date'], df[col], label='Equity Curve', color='blue')
+    plt.plot(df.index, df[col], label='Equity Curve', color='blue')
     title = "Equity Curve for {}".format(name) if name!="" else "Equity Curve"
     plt.title(title)
     plt.xlabel('Date')
@@ -220,7 +220,8 @@ def plot_equity_line(df, name='', col='Equity'):
     plt.show()
 
 
-def apply_strat(dataframe, init_capital, low_pd=5, rsi_pd=2, rsi_threshold=50, max_dim=5):
+def apply_strat(dataframe, init_capital, low_pd=5, rsi_pd=2, rsi_threshold=50, max_dim=5,
+                keep_cols=True):
     """
     Implements the third strategy in this article 
     https://www.quantifiedstrategies.com/3-free-mean-reversion-trading-strategies/
@@ -242,6 +243,8 @@ def apply_strat(dataframe, init_capital, low_pd=5, rsi_pd=2, rsi_threshold=50, m
         exit point
         - max_dim (int): The maximum number of days to stay in the market as a
         stop-loss condition
+        - keep_cols (bool): Option to keep new columns added. If False, will
+        drop all new columns added to the dataframe
 
     Returns:
         pd.DataFrame: Dataframe with the new columns
@@ -284,6 +287,8 @@ def apply_strat(dataframe, init_capital, low_pd=5, rsi_pd=2, rsi_threshold=50, m
         equity_line[i] = curr_capital
     dataframe["Equity"] = equity_line
     dataframe["Action"] = action
+    if not keep_cols:
+        dataframe = dataframe.drop(['Equity', 'Action', 'RSI_'+str(rsi_pd), 'Low_'+str(low_pd)], axis=1)
     return dataframe, total_days_in_market, n, num_round_trips, equity_line[-1]
 
 
@@ -339,7 +344,7 @@ def run_test(df, name, init_capital=1000, plot_ohlc_rsi=False, plot_equity=False
         pd.DataFrame: Dataframe with the additional columns acquired by apply_strat
     """
     
-    out, tdim, n, nrt, final = apply_strat(df, init_capital)
+    out, tdim, n, nrt, final = apply_strat(df, init_capital, keep_cols=False)
     
     if plot_ohlc_rsi:
         plot_candlestick_rsi(df)

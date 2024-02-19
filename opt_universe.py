@@ -11,7 +11,7 @@ import numpy as np
 import itertools
 from backtest import apply_strat
 
-opt_universe = {"low_pd":[3,6,2], "rsi_pd":[2,5,2], "rsi_threshold":[40,61,20], "max_dim":[5,6,1]}
+opt_universe = {"low_pd":[3,7,1], "rsi_pd":[2,6,1], "rsi_threshold":[40,71,10], "max_dim":[5,6,1]}
 
 def create_table(univ):
     """
@@ -66,7 +66,7 @@ def optimize_strat(df, values, init_capital=1000):
     values['Result'] = [0.0 for i in range(n)]
     for i in range(n):
         combo = list(values[names].iloc[i])
-        df, tdim, n, nrt, result = apply_strat(df, init_capital, *combo)
+        df, tdim, n, nrt, result = apply_strat(df, init_capital, *combo, keep_cols=False)
         values.loc[i, 'Result'] = result
         values.loc[i, 'Days in Market'] = tdim
         values.loc[i, 'In-market pct'] = 100 * tdim / n
@@ -75,7 +75,7 @@ def optimize_strat(df, values, init_capital=1000):
     print("Best Result: {} from the following parameters".format(max(values['Result'])))
     for val in best_values:
         print(values[names].iloc[val])
-    return values
+    return values, list(best_values[0])
         
 #values = create_table(opt_universe)
 #optimize_strat(aud_dollar, values)

@@ -19,7 +19,7 @@ import yfinance as yf
 
 
 # Get 1-hour OHLC data (default, customizable)
-def get_data_av(currency_pair, size, data_type='FX_INTRADAY', 
+def get_data_av(currency_pair, size, format_for='nautilus', data_type='FX_INTRADAY', 
                  interval='60min', apikey='CV4O3KUIMS9TVCLR'):
     
     path = 'Data/AlphaVantage/'
@@ -62,15 +62,23 @@ def get_data_av(currency_pair, size, data_type='FX_INTRADAY',
     
     print("Loading data from {}\n".format(filename))
     df = pd.read_csv(filename)
-    df.columns = ["timestamp", "open", "high", "low", "close"]
-    df.index = pd.core.indexes.datetimes.DatetimeIndex(df['timestamp'])
-    df = df.drop('timestamp', axis=1)
-    df.sort_index()
+    
+    if format_for == 'nautilus':
+        df.columns = ["timestamp", "open", "high", "low", "close"]
+        df.index = pd.core.indexes.datetimes.DatetimeIndex(df['timestamp'])
+        df = df.drop('timestamp', axis=1)
+        
+    elif format_for == 'manual':
+        df.columns = ['Timestamp', 'Open', 'High', 'Low', 'Close']
+        df.index = pd.core.indexes.datetimes.DatetimeIndex(df['Timestamp'])
+        df = df.drop('Timestamp', axis=1)
+    
+    df.sort_index(inplace=True)
     
     return df
 
 
-def get_data_yf(tickers, interval, period, *args):
+def get_data_yf(tickers, interval, period, *args, format_for='nautilus'):
     #maxes = {'1m':'7d', '60m':'2y', '1h':'2y', '2m':'60d', '5m':'60d',
     #         '15m':'60d', '30m':'60d', '90m':'60d'}
     path = 'Data/YahooFinance/'
@@ -92,10 +100,19 @@ def get_data_yf(tickers, interval, period, *args):
     print("Loading data from {}\n".format(filename))
     df = pd.read_csv(filename)
     df = df.drop(['Volume', 'Adj Close'], axis=1)
-    df.columns = ["timestamp", "open", "high", "low", "close"]
-    df.index = pd.core.indexes.datetimes.DatetimeIndex(df['timestamp'])
-    df = df.drop('timestamp', axis=1)
-    df.sort_index()
+    
+    if format_for == 'nautilus':
+        df.columns = ["timestamp", "open", "high", "low", "close"]
+        df.index = pd.core.indexes.datetimes.DatetimeIndex(df['timestamp'])
+        df = df.drop('timestamp', axis=1)
+        
+    elif format_for == 'manual':
+        df.columns = ['Timestamp', 'Open', 'High', 'Low', 'Close']
+        df.index = pd.core.indexes.datetimes.DatetimeIndex(df['Timestamp'])
+        df = df.drop('Timestamp', axis=1)
+    
+    df.sort_index(inplace=True)
+    
     return df
 
 #euro_dollar_compact_1d = get_data_av(('EUR','USD'), "compact", 'FX_DAILY', '1d')

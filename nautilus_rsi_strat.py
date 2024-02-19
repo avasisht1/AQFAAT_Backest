@@ -64,16 +64,16 @@ class LowX_RSIY_Strategy(Strategy):
     def on_bar(self, bar: Bar):
         # You can register indicators to receive quote tick updates automatically,
         # here we manually update the indicator to demonstrate the flexibility available.
-        print('\n\n RSI = {}\n\n'.format(self.rsi.value()))
-        print('\n\n Low = {}\n\n'.format(self.donch.low))
+        #print('\n\n RSI = {}\n\n'.format(self.rsi.value()))
+        #print('\n\n Low = {}\n\n'.format(self.donch.low))
         self.rsi.handle_bar(bar)
-        self.donch.handle_bar(bar)
-
         if not self.rsi.initialized or not self.donch.initialized:
             return  # Wait for indicator to warm up
         
-        # self._log.info(f"{self.macd.value=}:%5d")
+        #self._log.info(f"{self.rsi}:%5d")
+        #self._log.info(f"{self.donch.lower}:%5d")
         self.check_for_entry(bar.close)
+        self.donch.handle_bar(bar)
         self.check_for_exit()
 
     def on_event(self, event):

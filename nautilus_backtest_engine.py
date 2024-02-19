@@ -21,8 +21,8 @@ from nautilus_trader.backtest.engine import BacktestEngine
 from nautilus_trader.backtest.engine import BacktestEngineConfig
 from nautilus_trader.backtest.modules import FXRolloverInterestConfig
 from nautilus_trader.backtest.modules import FXRolloverInterestModule
-from nautilus_trader.examples.strategies.ema_cross import EMACross
-from nautilus_trader.examples.strategies.ema_cross import EMACrossConfig
+#from nautilus_trader.examples.strategies.ema_cross import EMACross
+#from nautilus_trader.examples.strategies.ema_cross import EMACrossConfig
 from nautilus_trader.model.currencies import USD
 from nautilus_trader.model.data import BarType
 from nautilus_trader.model.enums import AccountType
@@ -118,4 +118,6 @@ if __name__ == "__main__":
     engine.reset()
 
     # Good practice to dispose of the object when done
-    engine.dispose()
+    #engine.dispose()
+    
+    
