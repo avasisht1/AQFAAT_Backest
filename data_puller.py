@@ -20,12 +20,12 @@ import yfinance as yf
 
 # Get 1-hour OHLC data (default, customizable)
 def get_data_av(currency_pair, size, format_for='nautilus', data_type='FX_INTRADAY', 
-                 interval='60min', apikey='CV4O3KUIMS9TVCLR'):
+                 interval='60min', apikey='CV4O3KUIMS9TVCLR', redownload=False):
     
     path = 'Data/AlphaVantage/'
     # First check if we already have data on that currency pair
     filename = path+'{}_{}_{}_{}.csv'.format(*currency_pair, size, interval)
-    if not os.path.exists(filename):
+    if not os.path.exists(filename) or redownload:
         print("Data doesn't exist in {}".format(path))
         print("Querying AlphaVantage API ...")
         function = 'function={}'.format(data_type)
@@ -62,7 +62,7 @@ def get_data_av(currency_pair, size, format_for='nautilus', data_type='FX_INTRAD
     
     print("Loading data from {}\n".format(filename))
     df = pd.read_csv(filename)
-    
+
     if format_for == 'nautilus':
         df.columns = ["timestamp", "open", "high", "low", "close"]
         df.index = pd.core.indexes.datetimes.DatetimeIndex(df['timestamp'])
@@ -78,7 +78,7 @@ def get_data_av(currency_pair, size, format_for='nautilus', data_type='FX_INTRAD
     return df
 
 
-def get_data_yf(tickers, interval, period, *args, format_for='nautilus'):
+def get_data_yf(tickers, interval, period, *args, format_for='nautilus', redownload=False):
     #maxes = {'1m':'7d', '60m':'2y', '1h':'2y', '2m':'60d', '5m':'60d',
     #         '15m':'60d', '30m':'60d', '90m':'60d'}
     path = 'Data/YahooFinance/'
@@ -90,7 +90,7 @@ def get_data_yf(tickers, interval, period, *args, format_for='nautilus'):
         return
     c1,c2 = tickers[:3], tickers[3:6]
     filename = path + '{}_{}_{}_{}.csv'.format(c1,c2,interval,period)
-    if not os.path.exists(filename):
+    if not os.path.exists(filename) or redownload:
         print("Data doesn't exist in {}".format(path))
         print("Querying YahooFinance ...")
         df = yf.download(tickers=tickers, interval=interval, period=period, *args)
@@ -100,19 +100,28 @@ def get_data_yf(tickers, interval, period, *args, format_for='nautilus'):
     print("Loading data from {}\n".format(filename))
     df = pd.read_csv(filename)
     df = df.drop(['Volume', 'Adj Close'], axis=1)
+    #return df
     
     if format_for == 'nautilus':
-        df.columns = ["timestamp", "open", "high", "low", "close"]
-        df.index = pd.core.indexes.datetimes.DatetimeIndex(df['timestamp'])
-        df = df.drop('timestamp', axis=1)
+        df = format_nautilus(df)
         
     elif format_for == 'manual':
-        df.columns = ['Timestamp', 'Open', 'High', 'Low', 'Close']
-        df.index = pd.core.indexes.datetimes.DatetimeIndex(df['Timestamp'])
-        df = df.drop('Timestamp', axis=1)
+        df = format_manual(df)
     
     df.sort_index(inplace=True)
     
+    return df
+
+def format_manual(df):
+    df.columns = ['Timestamp', 'Open', 'High', 'Low', 'Close']
+    df.index = pd.core.indexes.datetimes.DatetimeIndex(df['Timestamp'])
+    df = df.drop('Timestamp', axis=1)
+    return df
+
+def format_nautilus(df):
+    df.columns = ["timestamp", "open", "high", "low", "close"]
+    df.index = pd.core.indexes.datetimes.DatetimeIndex(df['timestamp'])
+    df = df.drop('timestamp', axis=1)
     return df
 
 #euro_dollar_compact_1d = get_data_av(('EUR','USD'), "compact", 'FX_DAILY', '1d')

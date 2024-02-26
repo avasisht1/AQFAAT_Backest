@@ -7,6 +7,7 @@ from nautilus_trader.model.data import BarType
 from nautilus_trader.model.enums import PriceType
 from nautilus_trader.model.enums import PositionSide
 from nautilus_trader.model.enums import OrderSide
+from nautilus_trader.model.enums import TimeInForce
 from nautilus_trader.model.events import PositionOpened
 from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.objects import Quantity
@@ -42,12 +43,14 @@ class LowX_RSIY_Strategy(Strategy):
             ma_type=config.ma_type
         )
         # We copy some config values onto the class to make them easier to reference later on
-        self.donch = DonchianChannel(config.low_period)
+        self.donch = DonchianChannel(config.low_period+2)
         #self.entry_threshold = config.entry_threshold
         self.instrument_id = config.instrument_id
         self.trade_size = Quantity.from_int(config.trade_size)
         self.bar_type = config.bar_type
         self.days_in_market = 0
+        self.rsi_values = []
+        self.low_values = []
         
         # Convenience
         self.position: Position | None = None
@@ -67,12 +70,14 @@ class LowX_RSIY_Strategy(Strategy):
         #print('\n\n RSI = {}\n\n'.format(self.rsi.value()))
         #print('\n\n Low = {}\n\n'.format(self.donch.low))
         self.rsi.handle_bar(bar)
+        self.rsi_values.append(self.rsi.value)
+        self.low_values.append(self.donch.lower)
         if not self.rsi.initialized or not self.donch.initialized:
             return  # Wait for indicator to warm up
         
         #self._log.info(f"{self.rsi}:%5d")
         #self._log.info(f"{self.donch.lower}:%5d")
-        self.check_for_entry(bar.close)
+        self.check_for_entry(bar)
         self.donch.handle_bar(bar)
         self.check_for_exit()
 
@@ -80,19 +85,21 @@ class LowX_RSIY_Strategy(Strategy):
         if isinstance(event, PositionOpened):
             self.position = self.cache.position(event.position_id)
 
-    def check_for_entry(self, close):
+    def check_for_entry(self, bar):
         # If MACD line is above our entry threshold, we should be LONG
-        if close < self.donch.lower: # 5-DAY LOW
-            if self.position and self.position.side == PositionSide.LONG:
-                self.days_in_market += 1
-                return  # Already LONG
-
+        if self.position and self.position.side == PositionSide.LONG:
+            self.days_in_market += 1
+            #print('DAYS IN MARKET = {}'.format(self.days_in_market))
+            return  # Already LONG
+        
+        elif bar.close < self.donch.lower: # 5-DAY LOW
             order = self.order_factory.market(
                 instrument_id=self.instrument_id,
                 order_side=OrderSide.BUY,
-                quantity=self.trade_size,
+                quantity=self.trade_size
             )
             self.submit_order(order)
+            print("Enter")
         # If MACD line is below our entry threshold, we should be SHORT
         '''
         elif self.macd.value < -self.entry_threshold:
@@ -109,9 +116,19 @@ class LowX_RSIY_Strategy(Strategy):
 
     def check_for_exit(self):
         # If MACD line is above zero then exit if we are SHORT
-        if self.rsi.value >= 50.0 or self.days_in_market == self.config.max_days_in_market:
+        if self.rsi.value >= 0.50:
             if self.position and self.position.side == PositionSide.LONG:
                 self.close_position(self.position)
+                #print("EXIT - RSI too high = {}".format(self.rsi.value))
+                self.days_in_market = 0
+        
+        if self.days_in_market == self.config.max_days_in_market:
+            if self.position and self.position.side == PositionSide.LONG:
+                self.close_position(self.position)
+                #print("EXIT - In market too long = {} == {}".format(self.days_in_market, self.config.max_days_in_market))
+                self.days_in_market = 0
+        #print('\n')
+                
         # If MACD line is below zero then exit if we are LONG
         '''
         else:
@@ -120,4 +137,4 @@ class LowX_RSIY_Strategy(Strategy):
         '''
 
     def on_dispose(self):
-        pass  # Do nothing else
+        pass

@@ -66,7 +66,8 @@ def optimize_strat(df, values, init_capital=1000):
     values['Result'] = [0.0 for i in range(n)]
     for i in range(n):
         combo = list(values[names].iloc[i])
-        df, tdim, n, nrt, result = apply_strat(df, init_capital, *combo, keep_cols=False)
+        df, metrics = apply_strat(df, init_capital, *combo, keep_cols=False)
+        tdim, n, nrt, nw, result = tuple(metrics.values())
         values.loc[i, 'Result'] = result
         values.loc[i, 'Days in Market'] = tdim
         values.loc[i, 'In-market pct'] = 100 * tdim / n

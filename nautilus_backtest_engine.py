@@ -37,6 +37,8 @@ from nautilus_rsi_strat import LowX_RSIY_Strategy
 from nautilus_rsi_strat import LowX_RSIY_Config
 from nautilus_trader.indicators.average.moving_average import MovingAverageType
 from data_puller import get_data_av, get_data_yf
+import matplotlib.pyplot as plt
+from backtest import plot_equity_line
 
 
 if __name__ == "__main__":
@@ -59,7 +61,7 @@ if __name__ == "__main__":
     SIM = Venue("SIM")
     engine.add_venue(
         venue=SIM,
-        oms_type=OmsType.HEDGING,  # Venue will generate position IDs
+        oms_type=OmsType.NETTING,  # Venue will generate position IDs
         account_type=AccountType.MARGIN,
         base_currency=USD,  # Standard single-currency account
         starting_balances=[Money(1_000_000, USD)],  # Single-currency or multi-currency accounts
@@ -72,7 +74,8 @@ if __name__ == "__main__":
 
     # Add data
     wrangler = BarDataWrangler(instrument=EURUSD_SIM, bar_type=BarType.from_str("EUR/USD.SIM-1-DAY-MID-EXTERNAL"))
-    euro_dollar_full_1d = get_data_av(('EUR','USD'), 'full', 'FX_DAILY', '1d')
+    euro_dollar_full_1d = get_data_av(('EUR','USD'), 'full', 'nautilus', 'FX_DAILY', '1d')
+    #print(euro_dollar_full_1d)
     bars = wrangler.process(euro_dollar_full_1d)
     engine.add_data(bars)
 
@@ -82,7 +85,7 @@ if __name__ == "__main__":
         bar_type=BarType.from_str("EUR/USD.SIM-1-DAY-MID-EXTERNAL"),
         ma_type = MovingAverageType.EXPONENTIAL,
         low_period = 5,
-        max_days_in_market = 0,
+        max_days_in_market = 5,
         trade_size = Decimal(1_000_000),
         instrument_id = EURUSD_SIM.id
     )
@@ -109,15 +112,17 @@ if __name__ == "__main__":
     ):'''
     
     account_report = engine.trader.generate_account_report(SIM)
-        #print('\n\n')
+    fills_report = engine.trader.generate_fills_report()
     order_fill_report = engine.trader.generate_order_fills_report()
-        #print('\n\n')
+    orders_report = engine.trader.generate_orders_report()
     positions_report = engine.trader.generate_positions_report()
 
     # For repeated backtest runs make sure to reset the engine
     engine.reset()
 
     # Good practice to dispose of the object when done
-    #engine.dispose()
+    plt.plot(account_report['total'].astype(float))
+    plt.show()
+    engine.dispose()
     
     

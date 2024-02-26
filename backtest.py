@@ -98,7 +98,7 @@ def calculate_nday_low(dataframe, column='Low', n=5):
     """
     
     closes = dataframe[column]
-    lows = closes.rolling(n, 1).min()
+    lows = closes.rolling(window=n, min_periods=1).min()
     dataframe["Low_" + str(n)] = lows
     return dataframe
 
@@ -117,42 +117,43 @@ def calculate_rsi(dataframe, column='Close', window=14):
     """
 
     # Calculate price changes
-    delta = dataframe[column].diff(1)
+    delta = dataframe[column].pct_change()
 
     # Separate gains and losses
     gains = delta.where(delta > 0, 0)
     losses = -delta.where(delta < 0, 0)
 
     # Calculate average gains and losses over the specified window
-    avg_gains = list(gains.rolling(window=window).mean())
-    avg_losses = list(losses.rolling(window=window).mean())
+    avg_gains = list(gains.rolling(2).mean())
+    avg_losses = list(losses.rolling(2).mean())
+    avg_gains[0] = gains.iloc[0]
+    avg_losses[0] = losses.iloc[0]
 
     # Calculate relative strength (RS) and RSI
     rsi = [0 for _ in range(len(dataframe[column]))]
-    if avg_losses[window] != 0:
-        rs0 = avg_gains[window] / avg_losses[window]
-        rsi0 = 100 - (100 / (1 + rs0))
-    else:
-        rsi0 = 100
     
     for i in range(len(dataframe[column])):
-        if i < window:
-            rsi[i] = np.nan
-        elif i == window:
-            rsi[i] = rsi0
+        if i == 0:
+            rsi[i] = 100
+        elif i < window:
+            if avg_losses[i-1] != 0:
+                rs0 = avg_gains[i-1] / avg_losses[i-1]
+                rsi[i] = 100 - (100 / (1 + rs0))
+            else:
+                rsi[i] = 100
         else: # i > window
-            avg_gains[i] = (avg_gains[i-1]*(window-1) + gains[i])/window
-            avg_losses[i] = (avg_losses[i-1]*(window-1) + losses[i])/window
+            avg_gains[i] = (avg_gains[i-1]*(window-1) + gains.iloc[i])/window
+            avg_losses[i] = (avg_losses[i-1]*(window-1) + losses.iloc[i])/window
             if avg_losses[i] != 0:
                 rs = avg_gains[i]/avg_losses[i]
                 rsi[i] = 100 - (100 / (1 + rs))
             else:
                 rsi[i] = 100
                 
-    dataframe["Avg_gains"] = avg_gains
-    dataframe["Avg_losses"] = avg_losses
-    dataframe["Gains"] = gains
-    dataframe["Losses"] = losses
+    #dataframe["Avg_gains"] = avg_gains
+    #dataframe["Avg_losses"] = avg_losses
+    #dataframe["Gains"] = gains
+    #dataframe["Losses"] = losses
 
     # Add 'RSI' column to the original DataFrame
     dataframe['RSI_'+str(window)] = rsi
@@ -193,7 +194,7 @@ def plot_candlestick_rsi(dataframe):
     plt.show()
     
 
-def plot_equity_line(df, name='', col='Equity'):
+def plot_equity_line(df, name='', cols=['Equity']):
     """
     Plots the equity line of a given dataframe given a column to plot.
     
@@ -210,10 +211,10 @@ def plot_equity_line(df, name='', col='Equity'):
     """
     
     plt.figure(figsize=(10, 6))
-    plt.plot(df.index, df[col], label='Equity Curve', color='blue')
+    plt.plot(df[cols], label='Equity Curve')
     title = "Equity Curve for {}".format(name) if name!="" else "Equity Curve"
     plt.title(title)
-    plt.xlabel('Date')
+    plt.xlabel('Timestamp')
     plt.ylabel('Equity')
     plt.legend()
     plt.grid(True)
@@ -267,15 +268,17 @@ def apply_strat(dataframe, init_capital, low_pd=5, rsi_pd=2, rsi_threshold=50, m
     equity_line = [init_capital for _ in range(n)]
     action = ["None" for _ in range(n)]
     for i in range(max(low_pd, rsi_pd), n):
-        curr_close = dataframe["Close"][i]
-        curr_low = dataframe["Low_" + str(low_pd)][i - 1]
-        curr_rsi = dataframe["RSI_" + str(rsi_pd)][i]
+        curr_close = dataframe["Close"].iloc[i]
+        assert(type(curr_close) == np.float64)
+        curr_low = dataframe["Low_" + str(low_pd)].iloc[i - 1]
+        curr_rsi = dataframe["RSI_" + str(rsi_pd)].iloc[i]
         if not in_market:
             if curr_close < curr_low:
                 in_market = True
                 action[i] = "Enter"
         else: # in_market
-            curr_capital *= curr_close / dataframe["Close"][i - 1]
+            assert(type(dataframe['Close'].iloc[i-1]) == np.float64)
+            curr_capital *= curr_close / dataframe["Close"].iloc[i - 1]
             if curr_rsi > rsi_threshold or days_in_market == max_dim:
                 in_market = False
                 action[i] = "Exit"
@@ -287,9 +290,61 @@ def apply_strat(dataframe, init_capital, low_pd=5, rsi_pd=2, rsi_threshold=50, m
         equity_line[i] = curr_capital
     dataframe["Equity"] = equity_line
     dataframe["Action"] = action
+    num_wins = 0
+    for i in range(1, len(dataframe.index), 2):
+        if dataframe['Action'].iloc[i] > dataframe['Action'].iloc[i-1]:
+            num_wins += 1
     if not keep_cols:
-        dataframe = dataframe.drop(['Equity', 'Action', 'RSI_'+str(rsi_pd), 'Low_'+str(low_pd)], axis=1)
-    return dataframe, total_days_in_market, n, num_round_trips, equity_line[-1]
+        dataframe = dataframe.drop(['Action', 'RSI_'+str(rsi_pd), 'Low_'+str(low_pd)], axis=1)
+    
+    stats = {'Total Days in Market':total_days_in_market, 'Total days':n,
+             'Number of Round Trips':num_round_trips, 'Wins':num_wins,
+             'Final Capital':equity_line[-1]}
+    return dataframe, stats
+
+
+def calculate_sharpe_ratio(df, benchmark_equity, k=10):
+    equity = df['Equity']
+    n = len(equity)
+    returns = []
+    benchmark_returns = []
+    for i in range(1,k+1):
+        idx = i * (n//k)
+        prev = (i-1) * (n//k)
+        curr_equity = df['Equity'].iloc[idx]
+        prev_equity = df['Equity'].iloc[prev]
+        curr_benchmark = benchmark_equity['BH Equity'].iloc[idx]
+        prev_benchmark = benchmark_equity['BH Equity'].iloc[prev]
+        
+        strat_rtn = (curr_equity - prev_equity)/prev_equity
+        benchmark_rtn = (curr_benchmark - prev_benchmark)/prev_benchmark
+        
+        returns.append(strat_rtn)
+        benchmark_returns.append(benchmark_rtn)
+    
+    R_p = sum(returns)/len(returns)
+    R_f = sum(benchmark_returns)/len(benchmark_returns)
+    sd = (pd.Series(returns) - pd.Series(benchmark_returns)).var()
+    vol = pd.Series(returns).std() * np.sqrt(k)
+    return (R_p - R_f)/sd, vol
+
+
+def calculate_drawdown(equity_series):
+    # Calculate the cumulative returns
+    cumulative_returns = (1 + equity_series.pct_change()).cumprod()
+
+    # Calculate the cumulative maximum value
+    cumulative_max = cumulative_returns.cummax()
+
+    # Calculate the drawdown
+    drawdown = (cumulative_max - cumulative_returns)
+
+    # Find the maximum drawdown and its start and end dates
+    max_drawdown = drawdown.max()
+    max_drawdown_start = drawdown.idxmax()
+    max_drawdown_end = cumulative_returns.idxmax()
+
+    return max_drawdown, max_drawdown_start, max_drawdown_end
 
 
 def buy_and_hold(dataframe, init_capital):
@@ -315,14 +370,15 @@ def buy_and_hold(dataframe, init_capital):
     curr_capital = init_capital
     equity_line = [init_capital for i in range(n)]
     for i in range(1, n):
-        curr_close = dataframe["Close"][i]
-        prev_close = dataframe["Close"][i - 1]
+        curr_close = dataframe["Close"].iloc[i]
+        prev_close = dataframe["Close"].iloc[i - 1]
         curr_capital *= curr_close / prev_close
         equity_line[i] = curr_capital
-    return pd.DataFrame({"Date": dataframe["Date"], "BH Equity": equity_line}), equity_line[-1]
+    dataframe.insert(len(dataframe.columns), 'BH Equity', equity_line, True)
+    return dataframe['BH Equity'], equity_line[-1]
     
 
-def run_test(df, name, init_capital=1000, plot_ohlc_rsi=False, plot_equity=False, plot_buy_hold=False):
+def run_test(df, name, init_capital=1000, benchmark=None, plot_ohlc_rsi=False, plot_equity=False):
     """
     Runs a backtest on the strategy implemented in apply_strat.
     
@@ -344,25 +400,53 @@ def run_test(df, name, init_capital=1000, plot_ohlc_rsi=False, plot_equity=False
         pd.DataFrame: Dataframe with the additional columns acquired by apply_strat
     """
     
-    out, tdim, n, nrt, final = apply_strat(df, init_capital, keep_cols=False)
-    
+    out, metrics = apply_strat(df, init_capital, keep_cols=False)
     if plot_ohlc_rsi:
         plot_candlestick_rsi(df)
+        
+    nrt, num_wins, tdim, n, final = tuple(metrics.values())
+    peak = max(out['Equity'])
+    metrics['Equity Peak'] = peak
+    final_capital = metrics['Final Capital']
+    num_years = (out.index[-1] - out.index[0]).days/252
+    metrics['Annualized Return'] = ((final_capital/init_capital) - 1)/num_years
+    #metrics['Max Drawdown'] = calculate_drawdown(out['Equity'])
     
-    print("Strategy Name: {}\n\tTime in Market: {}/{} = {}%\n\tFinal Capital: {}"\
-          .format(name, tdim, n, 100 * tdim / n, final))
-    
-    if plot_buy_hold:
-        outbh, finalbh = buy_and_hold(df, init_capital)
+    if not (benchmark is None) and not (benchmark[0] is None):
+        benchmark, benchmark_name, plot_benchmark = benchmark
+        benchmark = benchmark.loc[max(df.index[0], benchmark.index[0]):min(df.index[-1], benchmark.index[-1])]
+        outbh, finalbh = buy_and_hold(benchmark, init_capital)
+        df.insert(len(df.columns), 'BH Equity', outbh, True)
         print("Buy and Hold Final Capital: {}".format(finalbh))
-        plot_equity_line(outbh, "Buy and Hold", 'BH Equity')
+        metrics['Sharpe Ratio'], metrics['Volatility'] = calculate_sharpe_ratio(df, df)
+    else:
+        benchmark_name = ''
+        plot_benchmark = False
     
     if plot_equity:
-        plot_equity_line(df, name=name)
-    
-    return df
+        plt.figure(figsize=(10, 6))
+        plt.plot(df['Equity'], label='Equity Curve')
+        title=''
+        if name=='':
+            title = 'Equity Curve'
+        else:
+            if benchmark_name=='':
+                title = 'Equity Curve for {}'.format(name)
+            else:
+                title = 'Equity Curve for {} vs {}'.format(name, benchmark_name)
+        plt.title(title)
+        plt.xlabel('Timestamp')
+        plt.ylabel('Equity')
+        if plot_benchmark:
+            plt.plot(outbh, label=benchmark_name)
+        plt.legend()
+        
+        #plt.axvline(metrics['Max Drawdown'][1])
+        #plt.axvline(metrics['Max Drawdown'][2])
+        
+        plt.grid(True)
+        plt.show()
+        
+        print('Metrics for Strategy {}:\n{}'.format(name, metrics))
+    return df, metrics
 
-
-#euro_dollar_compact_1h = get_data_av(('EUR','USD'), "full", 'FX_HOURLY', '60min')[::-1]
-#euro_dollar_compact_1h.columns = ['Open', 'High', 'Low', 'Close']
-#run_test(euro_dollar_compact_1d, "EUR/USD RSI2, Low5", 1_000_000, False)
