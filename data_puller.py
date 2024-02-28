@@ -19,7 +19,7 @@ import yfinance as yf
 
 
 # Get 1-hour OHLC data (default, customizable)
-def get_data_av(currency_pair, size, format_for='nautilus', data_type='FX_INTRADAY', 
+def get_data_av(currency_pair, size, format_for='manual', data_type='FX_INTRADAY', 
                  interval='60min', apikey='CV4O3KUIMS9TVCLR', redownload=False):
     
     path = 'Data/AlphaVantage/'

@@ -308,8 +308,9 @@ def calculate_sharpe_ratio(df, benchmark_equity, k=10):
     n = len(equity)
     returns = []
     benchmark_returns = []
+    #print(benchmark_equity)
     for i in range(1,k+1):
-        idx = i * (n//k)
+        idx = i * (n//k)-1
         prev = (i-1) * (n//k)
         curr_equity = df['Equity'].iloc[idx]
         prev_equity = df['Equity'].iloc[prev]
@@ -324,7 +325,8 @@ def calculate_sharpe_ratio(df, benchmark_equity, k=10):
     
     R_p = sum(returns)/len(returns)
     R_f = sum(benchmark_returns)/len(benchmark_returns)
-    sd = (pd.Series(returns) - pd.Series(benchmark_returns)).var()
+    #print('\n\nReturns = {}\nBenchmark Returns = {}\n\n'.format(returns, benchmark_returns))
+    sd = (pd.Series(returns) - pd.Series(benchmark_returns)).std(ddof=0)
     vol = pd.Series(returns).std() * np.sqrt(k)
     return (R_p - R_f)/sd, vol
 
@@ -417,7 +419,8 @@ def run_test(df, name, init_capital=1000, benchmark=None, plot_ohlc_rsi=False, p
         benchmark = benchmark.loc[max(df.index[0], benchmark.index[0]):min(df.index[-1], benchmark.index[-1])]
         outbh, finalbh = buy_and_hold(benchmark, init_capital)
         df.insert(len(df.columns), 'BH Equity', outbh, True)
-        print("Buy and Hold Final Capital: {}".format(finalbh))
+        df = df.dropna()
+        print("Buy and Hold Final Capital: {}\n".format(finalbh))
         metrics['Sharpe Ratio'], metrics['Volatility'] = calculate_sharpe_ratio(df, df)
     else:
         benchmark_name = ''
