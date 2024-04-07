@@ -6,11 +6,18 @@ Created on Mon Feb 19 14:07:11 2024
 @author: aniruddh
 """
 
-from data_puller import get_data_av, get_data_yf, format_manual, format_nautilus
-from opt_universe import optimize_strat, create_table, plot_search_space
-from backtest import run_test, hourly_to_daily, plot_equity_line, apply_strat
+#from data_puller import get_data_av, get_data_yf, format_manual, format_nautilus
+#from opt_universe import optimize_strat, create_table, plot_search_space
+#from backtest import run_test, hourly_to_daily, plot_equity_line, apply_strat
 import pandas as pd
+import numpy as np
+import vectorbt as vbt
+import importlib.util
+import os
+import itertools
 
+from warnings import simplefilter
+simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
 
 EUR = 'EUR'
 JPY = 'JPY'
@@ -23,7 +30,26 @@ CHF = 'CHF'
 HKD = 'HKD'
 KRW = 'KRW'
 
-pairs = [(EUR, USD), (AUD, USD), (GBP, USD), (USD, CAD), (USD, JPY), (USD, CNY), (USD, CHF), (USD, HKD), (EUR, GBP), (USD, KRW)]
+pairs = [(EUR, USD), (AUD, USD), (GBP, USD), (USD, CAD), (USD, JPY),
+         (USD, CNY), (USD, CHF), (USD, HKD), (EUR, GBP), (USD, KRW)]
+
+'''
+strats = [strategy1, strategy2, strategy3]
+
+defaults1 = {'low_window':[3,4,5,6,7],
+             'rsi_window':[2,3,4,5,6], 
+             'rsi_threshold':[30,40,50,60,70],
+             'max_dim':[3,4,5,6,7]}
+
+defaults2 = {'rsi_window':[3,4,5,6,7],
+             'rsi_lower':[25,35,45],
+             'rsi_upper':[50,60,70],
+             'sma_window':[150,175,200,225,250]}
+
+defaults3 = {'range_window':[15,20,25,30,35],
+             'high_window':[15,20,25,30,35],
+             'band_width':[1,2,3,4,5],
+             'ibs_threshold':[0.3,0.4,0.5,0.6]}
 
 def hourly_test(pair, benchmark=None, plot_equity=False):
     df = get_data_av(pair, 'compact', format_for='manual')
@@ -44,20 +70,207 @@ snp = pd.read_csv('Data/YahooFinance/SPX.csv').drop(['Adj Close', 'Volume'], axi
 snp = format_manual(snp)
 benchmark=(snp, 'Buy&Hold S&P 500', True)
 best_params = {pair:[] for pair in pairs}
-training_proportion = 2/3
+'''
+train_prop = (7,10)
+num_pairs = len(pairs)
 
+folder_path = 'vbt_strats'
 
-for i in range(2,3):
-    #default = (5,T 2, 50, 5)
+for pair in pairs[5:]:
+    #default = (5, 2, 50, 5)
     # Get the actual data for the pair
-    pair = pairs[i]
+    #pair = pairs[i]
     name = pair[0]+pair[1]+'=X'
-    df = get_data_yf(tickers=name, interval='1d', period='max', format_for='manual')
-    split_point = len(df.index)*2//3
+    # Change the following to reading from csv after it's all been stored
+    df = vbt.YFData.download(name, missing_index='drop').get()
+    
+    split_point = len(df.index)*train_prop[0]//train_prop[1]
     df_train = df.iloc[:split_point]
     df_test = df.iloc[split_point:]
-    # Run the tests and plot equity lines with and without the benchmark comparison
     
+    sames_train = np.where(df_train['High'] == df_train['Low'])[0]
+    df_train.drop([df_train.index[i] for i in sames_train], axis=0, inplace=True)
+    
+    sames_test = np.where(df_test['High'] == df_test['Low'])[0]
+    df_test.drop([df_test.index[i] for i in sames_test], axis=0, inplace=True)
+    
+    # Remove later after all data has been stored
+    df.to_csv('Data/vbt/{}.csv'.format(name))
+    print('Historical data written to Data/vbt/{}.csv'.format(name))
+    
+    # Get functions that run the strategies
+    # Iterate over the files and import functions from each file
+    for file in os.listdir(folder_path):
+        metrics_train = pd.DataFrame()
+        metrics_test = pd.DataFrame()
+        if not file.endswith('.py'):
+            continue
+        strat_number = int(file.split('_')[0][5:])
+        print('Getting metrics for Strategy {}'.format(strat_number))
+        # Construct the module name from the file name
+        module_name = file[:-3]  # Remove the .py extension
+        
+        print('Trying to import strategy')
+        
+        strat = importlib.import_module(module_name)
+                
+        # Run unoptimized strategy on train and test set
+        pf_train, _ = strat.run_strategy(df_train, name, test_type='range')
+        pf_test, _ = strat.run_strategy(df_test, name, test_type='range')
+        
+        print('Compiling metrics ...')
+        for combo in itertools.product(*[strat.ranges[param] for param in strat.ranges]):
+            train_metrics = pf_train[combo].stats(settings=dict(freq='d'), silence_warnings=True)
+            metrics_train.index = train_metrics.index
+            metrics_train = pd.concat([metrics_train, train_metrics], axis=1)
+        
+            test_metrics = pf_test[combo].stats(settings=dict(freq='d'), silence_warnings=True)
+            metrics_test.index = test_metrics.index
+            metrics_test = pd.concat([metrics_test, test_metrics], axis=1)
+        
+        filename_train = 'metrics/strat{}/{}_{}_{}.csv'.format(strat_number, name, *train_prop)
+        print('Done! Writing training metrics to {}'.format(filename_train))
+        metrics_train.to_csv(filename_train)
+        print('Train metrics written to {}'.format(filename_train))
+        
+        test_prop = (train_prop[1]-train_prop[0], train_prop[1])
+        filename_test = 'metrics/strat{}/{}_{}_{}.csv'.format(strat_number, name, *test_prop)
+        
+        print('Writing testing metrics to {}'.format(filename_test))
+        metrics_test.to_csv(filename_test)
+        print('Test metrics written to {}\n'.format(filename_test))
+        
+        #action = input('Continue to next strategy? ("n" to quit): ')
+        #if len(action) > 0 and action[0].lower() == 'n':
+        #    break
+        
+    #if i < num_pairs-1:
+    #    action = input('Continue to {}? ("n" to quit): '.format(pairs[i+1]))
+    #    if len(action)>0 and action[0].lower() == 'n':
+    #        break
+    
+
+    # Run the tests and plot equity lines with and without the benchmark comparison
+'''    
+        s1 = vbt.IndicatorFactory(
+            class_name = 'Strategy 1',
+            short_name = 'strat1',
+            input_names = ['low', 'closes'],
+            param_names = list(defaults1),
+            output_names = ['entries', 'exits'],
+            ).from_apply_func(strategy1, **defaults1)
+        
+        s2 = vbt.IndicatorFactory(
+            class_name = 'Strategy 2',
+            short_name = 'strat2',
+            input_names = ['closes'],
+            param_names = list(defaults2),
+            output_names = ['entries', 'exits'],
+            ).from_apply_func(strategy2, **defaults2)
+        
+        s3 = vbt.IndicatorFactory(
+            class_name = 'Strategy 3',
+            short_name = 'strat3',
+            input_names = ['low', 'high', 'closes'],
+            param_names = list(defaults3),
+            output_names = ['entries', 'exits'],
+            ).from_apply_func(strategy3, **defaults3)
+    
+            
+        res1train = s1.run(df_train['Low'], df_train['Close'],
+                           **defaults1,
+                           param_product=True)
+        
+        res2train = s2.run(df_train['Close'],
+                           **defaults2,
+                           param_product=True)
+        
+        res3train = s3.run(df_train['Low'], df_train['High'], df_train['Close'],
+                           **defaults3,
+                           param_product=True)
+    
+        pf1train = vbt.Portfolio.from_signals(df_train['Close'], res1train.entries, res1train.exits)
+        pf2train = vbt.Portfolio.from_signals(df_train['Close'], res2train.entries, res2train.exits)
+        pf3train = vbt.Portfolio.from_signals(df_train['Close'], res3train.entries, res3train.exits)
+
+        print('\n{} Strategy 1 Return\n'.format(name))    
+        ret1 = pf1train.total_return()
+        maxes1 = np.where(ret1==max(ret1))[0]
+        num_params1 = len(defaults1)
+        param_names1 = list(defaults1.keys())
+        best1 = {param_names1[i]:ret1.index[maxes1][0][i] for i in range(num_params1)}
+        #print(ret1)
+        print('\nBest Params: {}'.format(best1))
+        print('Best Return: {}'.format(max(ret1)))
+        
+        print('\n{} Strategy 2 Return\n'.format(name))    
+        ret2 = pf2train.total_return()
+        maxes2 = np.where(ret2==max(ret2))[0]
+        num_params2 = len(defaults2)
+        param_names2 = list(defaults2.keys())
+        best2 = {param_names2[i]:ret2.index[maxes2][0][i] for i in range(num_params2)}
+        #print(ret2)
+        print('\nBest Params: {}'.format(best2))
+        print('Best Return: {}'.format(max(ret2)))
+        
+        print('\n{} Strategy 3 Return\n'.format(name))    
+        ret3 = pf3train.total_return()
+        maxes3 = np.where(ret3==max(ret3))[0]
+        num_params3 = len(defaults3)
+        param_names3 = list(defaults3.keys())
+        best3 = {param_names3[i]:ret3.index[maxes3][0][i] for i in range(num_params3)}
+        #print(ret3)
+        print('\nBest Params: {}'.format(best3))
+        print('Best Return: {}'.format(max(ret3)))
+'''        
+'''        
+        res1best = s1.run(df_train['Low'], df_train['Close'], **best1)
+        res2best = s2.run(df_train['Close'], **best2)
+        res3best = s3.run(df_train['Low'], df_train['High'], df_train['Close'], **best3)
+        
+        pf1best = vbt.Portfolio.from_signals(df_train['Close'], res1best.entries, res1best.exits)
+        pf2best = vbt.Portfolio.from_signals(df_train['Close'], res2best.entries, res2best.exits)
+        pf3best = vbt.Portfolio.from_signals(df_train['Close'], res3best.entries, res3best.exits)
+        
+        print(pf1best.stats(settings=dict(freq='d')))
+        print(pf2best.stats(settings=dict(freq='d')))
+        print(pf3best.stats(settings=dict(freq='d')))
+        
+        pf1best.plot().show()
+        pf2best.plot().show()
+        pf3best.plot().show()
+        
+        res1test = s1.run(df_test['Low'], df_test['Close'], **best1)
+        res2test = s2.run(df_test['Close'], **best2)
+        res3test = s3.run(df_test['Low'], df_test['High'], df_test['Close'], **best3)
+    
+        pf1test = vbt.Portfolio.from_signals(df_test['Close'], res1test.entries, res1test.exits)
+        pf2test = vbt.Portfolio.from_signals(df_test['Close'], res2test.entries, res2test.exits)
+        pf3test = vbt.Portfolio.from_signals(df_test['Close'], res3test.entries, res3test.exits)
+        
+        print(pf1test.stats(settings=dict(freq='d')))
+        print(pf2test.stats(settings=dict(freq='d')))
+        print(pf3test.stats(settings=dict(freq='d')))
+        
+        pf1test.plot().show()
+        pf2test.plot().show()
+        pf3test.plot().show()
+        
+        print('\n{} Strategy 1 Optimized Return\n'.format(name))    
+        ret1opt = pf1test.total_return()
+        print(ret1opt)
+        
+        print('\n{} Strategy 2 Optimized Return\n'.format(name))    
+        ret2opt = pf2test.total_return()
+        print(ret2opt)
+        
+        print('\n{} Strategy 3 Optimized Return\n'.format(name))    
+        ret3opt = pf3test.total_return()
+        print(ret3opt)
+'''
+    
+    
+'''    
     run_test(df_train, '{}/{} Low5_RSI2'.format(*pair), benchmark=None, plot_equity=True)
     df_train, metrics = run_test(df_train, '{}/{} Low5_RSI2'.format(*pair), benchmark=benchmark, plot_equity=True)
     f = open('{}{}_train_metrics.csv'.format(*pair), 'w')
@@ -105,7 +318,7 @@ for i in range(2,3):
     
     #if action[0].lower() == 'n':
     #    break
-        
+'''        
 
 #cnyusd = daily_test(CNYUSD, plot_equity=True)
 

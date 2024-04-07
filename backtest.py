@@ -16,6 +16,8 @@ aud_dollar.index = [i for i in range(len(aud_dollar))]
 gbp_dollar.index = [i for i in range(len(gbp_dollar))]
 '''
 
+euro_dollar = get_data_yf('EURUSD=X', interval='1d', period='max', format_for='manual')
+
 def validate_data(dataframe, error_code="Date"):
     """
     Makes sure that a dataframe of historical OHLC data are valid.
