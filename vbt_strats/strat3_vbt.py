@@ -9,7 +9,7 @@ Strategy Rules:
     Calculate an average of the H-L over the last 25 days.
     Calculate the (C-L)/(H-L) ratio every day (IBS).
     Calculate a band 2 times lower than the high over the last 25 days by using the average from point number 1.
-    If XLP closes under the band in number 3, and point 2 (IBS) has a higher value than 0.4, then go long at the close.
+    If the close is under the band in number 3, and point 2 (IBS) has a higher value than 0.4, then go long at the close.
     Exit when the close is higher than yesterday’s high.
 """
 
@@ -72,7 +72,7 @@ def strategy3(low, high, closes, range_window, high_window, band_width, ibs_thre
         print('avg_ranges: {}'.format(np.shape(avg_ranges)))
         print('avg_highs: {}'.format(np.shape(avg_highs)))
         print('band: {}'.format(np.shape(band)))
-        print('low[0]: {}'.format(np.shape(low)[0]))
+        print('np.shape(low)[0]: {}'.format(np.shape(low)[0]))
         print(band_width*avg_ranges)
         print(avg_highs)
         print(band)
@@ -91,6 +91,8 @@ def strategy3(low, high, closes, range_window, high_window, band_width, ibs_thre
 
 
 pairs = ['EURUSD=X', 'AUDUSD=X', 'GBPUSD=X', 'CADUSD=X']
+pairs = 'EURUSD=X'
+
 num_pairs = len(pairs)
 defaults = {'range_window':25, 'high_window':25,
           'band_width':2, 'ibs_threshold':0.4}
@@ -99,6 +101,8 @@ ranges = {'range_window':[15,20,25,30,35], 'high_window':[15,20,25,30,35],
           'band_width':[1,2,3,4,5], 'ibs_threshold':[0.3,0.4,0.5,0.6]}
 
 df = vbt.YFData.download(pairs[0], missing_index='drop').get()
+sames = np.where(df['High'] == df['Low'])[0]
+df.drop([df.index[i] for i in sames], axis=0, inplace=True)
 
 pf = 0
 total_returns = 0
@@ -107,30 +111,22 @@ best_params = 0
 max_returns = 0
 
 def run_strategy(df, name, test_type='range', params=ranges, verbose=False):
-    is_set = lambda v: (isinstance(v, int) or (isinstance(v, list) and len(v)==1))
+    numeric = (int, float, np.int64, np.float64)
+    is_set = lambda v: (isinstance(v, numeric) or (isinstance(v, list) and len(v)==1))
     try:
-        assert((test_type == 'range' and not is_set(params)) 
-               or (test_type == 'set' and is_set(params)))
+        assert((test_type == 'range' and not np.all( [is_set(params[k]) for k in params] )) 
+               or (test_type == 'set' and np.all( [is_set(params[k]) for k in params] ) ))
     except AssertionError:
         print('Assertion Failed: Params == {}, test_type == {}'.format(params, test_type))
         raise AssertionError
     
-    if test_type == 'range':
-        ind = vbt.IndicatorFactory(
-            class_name = 'Strategy 3',
-            short_name = 'strat3',
-            input_names = ['low', 'high', 'closes'],
-            param_names = list(defaults),
-            output_names = ['entries', 'exits'],
-            ).from_apply_func(strategy3, **params)
-    else:
-        ind = vbt.IndicatorFactory(
-            class_name = 'Strategy 3',
-            short_name = 'strat3',
-            input_names = ['low', 'high', 'closes'],
-            param_names = list(defaults),
-            output_names = ['entries', 'exits'],
-            ).from_apply_func(strategy3, **params)
+    ind = vbt.IndicatorFactory(
+        class_name = 'Strategy 3',
+        short_name = 'strat3',
+        input_names = ['low', 'high', 'closes'],
+        param_names = list(defaults),
+        output_names = ['entries', 'exits'],
+        ).from_apply_func(strategy3, **params)
         
     res = ind.run(df['Low'], df['High'], df['Close'], **params, param_product=True)
     pf = vbt.Portfolio.from_signals(df['Close'], res.entries, res.exits)
@@ -140,7 +136,7 @@ def run_strategy(df, name, test_type='range', params=ranges, verbose=False):
         print('\n{} Strategy 3 Return\n'.format(name))  
         print(ret)
     
-    if test_type == 'set':
+    if test_type == 'range':
         maxes = np.where(ret==max(ret))[0]
         num_params = len(defaults)
         param_names = list(defaults.keys())
@@ -153,3 +149,6 @@ def run_strategy(df, name, test_type='range', params=ranges, verbose=False):
     # else
     global max_returns
     return pf, pf.total_return()
+
+
+#pf, ret = run_strategy(df, '', test_type='set', params=defaults)

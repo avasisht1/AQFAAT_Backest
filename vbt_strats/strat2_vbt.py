@@ -32,6 +32,8 @@ def strategy2(closes, rsi_window, rsi_lower, rsi_upper, sma_window):
 
     
 pairs = ['EURUSD=X', 'AUDUSD=X', 'GBPUSD=X', 'CADUSD=X']
+pairs = 'EURUSD=X'
+
 num_pairs = len(pairs)
 defaults = {'rsi_window':5, 'rsi_lower':35,
             'rsi_upper':50, 'sma_window':200}
@@ -48,14 +50,15 @@ best_params = 0
 max_returns = 0
 
 def run_strategy(df, name, test_type='range', params=ranges, verbose=False):
-    is_set = lambda v: (isinstance(v, int) or (isinstance(v, list) and len(v)==1))
+    numeric = (int, float, np.int64, np.float64)
+    is_set = lambda v: (isinstance(v, numeric) or (isinstance(v, list) and len(v)==1))
     try:
-        assert((test_type == 'range' and not is_set(params)) 
-               or (test_type == 'set' and is_set(params)))
+        assert((test_type == 'range' and not np.all( [is_set(params[k]) for k in params] )) 
+               or (test_type == 'set' and np.all( [is_set(params[k]) for k in params] ) ))
     except AssertionError:
         print('Assertion Failed: Params == {}, test_type == {}'.format(params, test_type))
         raise AssertionError
-        
+    
     ind = vbt.IndicatorFactory(
         class_name = 'Strategy 2',
         short_name = 'strat2',
@@ -63,27 +66,16 @@ def run_strategy(df, name, test_type='range', params=ranges, verbose=False):
         param_names = list(defaults),
         output_names = ['entries', 'exits'],
         ).from_apply_func(strategy2, **params, param_product=True)
-    '''     
-    else:
-        ind = vbt.IndicatorFactory(
-            class_name = 'Strategy 2',
-            short_name = 'strat2',
-            input_names = ['closes'],
-            param_names = list(defaults),
-            output_names = ['entries', 'exits'],
-            ).from_apply_func(strategy2, **params, param_product=True)
-    '''
+        
     res = ind.run(df['Close'], **params)
     pf = vbt.Portfolio.from_signals(df['Close'], res.entries, res.exits)
-        
-    #print(pf[(3,25,50,150)].stats(settings=dict(freq='d')))
-        
+                
     ret = pf.total_return()
     if verbose:
         print('\n{} Strategy 2 Return\n'.format(name))  
         print(ret)
     
-    if test_type == 'set':
+    if test_type == 'range':
         maxes = np.where(ret==max(ret))[0]
         num_params = len(defaults)
         param_names = list(defaults.keys())
@@ -96,3 +88,6 @@ def run_strategy(df, name, test_type='range', params=ranges, verbose=False):
     # else
     global max_returns
     return pf, pf.total_return()
+
+
+#pf, ret = run_strategy(df, '', test_type='set', params=defaults)

@@ -12,7 +12,6 @@ Strategy Rules:
 """
 
 import vectorbt as vbt
-#from ../data_puller import get_data_yf
 import pandas as pd
 import numpy as np
 
@@ -78,6 +77,8 @@ def strategy1(low, closes, low_window, rsi_window, rsi_threshold, max_dim):
     return entries, exits
 
 pairs = ['EURUSD=X', 'AUDUSD=X', 'GBPUSD=X', 'CADUSD=X']
+pairs = 'EURUSD=X'
+
 num_pairs = len(pairs)
 defaults = {'low_window':5, 'rsi_window':2, 'rsi_threshold':50, 'max_dim':5}
 ranges = {'low_window':[3,4,5,6,7], 'rsi_window':[2,3,4,5,6],
@@ -92,30 +93,22 @@ best_params = 0
 max_returns = 0
 
 def run_strategy(df, name, test_type='range', params=ranges, verbose=False):
-    is_set = lambda v: (isinstance(v, int) or (isinstance(v, list) and len(v)==1))
+    numeric = (int, float, np.int64, np.float64)
+    is_set = lambda v: (isinstance(v, numeric) or (isinstance(v, list) and len(v)==1))
     try:
-        assert((test_type == 'range' and not is_set(params)) 
-               or (test_type == 'set' and is_set(params)))
+        assert((test_type == 'range' and not np.all( [is_set(params[k]) for k in params] )) 
+               or (test_type == 'set' and np.all( [is_set(params[k]) for k in params] ) ))
     except AssertionError:
         print('Assertion Failed: Params == {}, test_type == {}'.format(params, test_type))
         raise AssertionError
     
-    if test_type == 'range':
-        ind = vbt.IndicatorFactory(
-            class_name = 'Strategy 1',
-            short_name = 'strat1',
-            input_names = ['low', 'closes'],
-            param_names = list(defaults),
-            output_names = ['entries', 'exits'],
-            ).from_apply_func(strategy1, **params, param_product=True)
-    else:
-        ind = vbt.IndicatorFactory(
-            class_name = 'Strategy 1',
-            short_name = 'strat1',
-            input_names = ['low', 'closes'],
-            param_names = list(defaults),
-            output_names = ['entries', 'exits'],
-            ).from_apply_func(strategy1, **params, param_product=True)
+    ind = vbt.IndicatorFactory(
+        class_name = 'Strategy 1',
+        short_name = 'strat1',
+        input_names = ['low', 'closes'],
+        param_names = list(defaults),
+        output_names = ['entries', 'exits'],
+        ).from_apply_func(strategy1, **params, param_product=True)
     
     res = ind.run(df['Low'], df['Close'], **params)
     pf = vbt.Portfolio.from_signals(df['Close'], res.entries, res.exits)
@@ -125,7 +118,7 @@ def run_strategy(df, name, test_type='range', params=ranges, verbose=False):
         print('\n{} Strategy 1 Return\n'.format(name))  
         print(ret)
     
-    if test_type == 'set':
+    if test_type == 'range':
         maxes = np.where(ret==max(ret))[0]
         num_params = len(defaults)
         param_names = list(defaults.keys())
@@ -140,23 +133,4 @@ def run_strategy(df, name, test_type='range', params=ranges, verbose=False):
     return pf, pf.total_return()    
     
 
-'''    
-    print('\n{} Strategy 1 Return\n'.format(name))    
-    ret = pf.total_return()
-    
-    maxes = np.where(ret==max(ret))[0]
-    num_params = len(defaults)
-    param_names = list(defaults.keys())
-    best = {param_names[i]:ret.index[maxes][0][i] for i in range(num_params)}
-    #print(ret)
-    print('\nBest Params: {}'.format(best))
-    print('Best Return: {}'.format(max(ret)))
-    
-    resbest = ind.run(df['Low'], df['Close'], **best)
-    pfbest = vbt.Portfolio.from_signals(df['Close'], resbest.entries, resbest.exits)
-'''    
-
-    
-#   pf.plot().show()
-
-#run_strat(df, '')
+#pf, ret = run_strategy(df, '', test_type='set', params=defaults)

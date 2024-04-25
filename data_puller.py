@@ -21,7 +21,7 @@ import yfinance as yf
 # Get 1-hour OHLC data (default, customizable)
 def get_data_av(currency_pair, size, format_for='manual', data_type='FX_INTRADAY', 
                  interval='60min', apikey='CV4O3KUIMS9TVCLR', redownload=False):
-    
+    assert(size == 'compact' or size == 'full')
     path = 'Data/AlphaVantage/'
     # First check if we already have data on that currency pair
     filename = path+'{}_{}_{}_{}.csv'.format(*currency_pair, size, interval)
@@ -78,10 +78,10 @@ def get_data_av(currency_pair, size, format_for='manual', data_type='FX_INTRADAY
     return df
 
 
-def get_data_yf(tickers, interval, period, *args, format_for='nautilus', redownload=False):
+def get_data_yf(tickers, interval, period, *args, format_for='manual', redownload=False):
     #maxes = {'1m':'7d', '60m':'2y', '1h':'2y', '2m':'60d', '5m':'60d',
     #         '15m':'60d', '30m':'60d', '90m':'60d'}
-    path = 'Data/YahooFinance/'
+    path = 'Data/YahooFinance/{}/'.format(tickers[:-2])
     if len(args) > 2:
         print("Too many arguments; args 4 and 5 must be start and end")
         return
@@ -114,18 +114,18 @@ def get_data_yf(tickers, interval, period, *args, format_for='nautilus', redownl
 
 def format_manual(df):
     df.columns = ['Timestamp', 'Open', 'High', 'Low', 'Close']
-    df.index = pd.core.indexes.datetimes.DatetimeIndex(df['Timestamp'])
+    df.index = pd.to_datetime(df['Timestamp'], utc=True)
     df = df.drop('Timestamp', axis=1)
     return df
 
 def format_nautilus(df):
     df.columns = ["timestamp", "open", "high", "low", "close"]
-    df.index = pd.core.indexes.datetimes.DatetimeIndex(df['timestamp'])
+    df.index = pd.to_datetime(df['timestamp'], utc=True)
     df = df.drop('timestamp', axis=1)
     return df
 
 #euro_dollar_compact_1d = get_data_av(('EUR','USD'), "compact", 'FX_DAILY', '1d')
 #euro_dollar_full_1h = get_data_av(currency_pair=('EUR','USD'), size="full")
 
-#euro_dollar_yf_1h = yf.download(tickers='EURUSD=X', interval='1h', period='2y')
-#euro_dollar_yf_1d = get_data_yf(tickers='EURUSD=X', interval='1d', period='100d')
+#euro_dollar_yf_1h = get_data_yf(tickers='EURUSD=X', interval='1h', period='2y')
+#euro_dollar_av_1h = get_data_av(('EUR', 'USD'), size='full')
