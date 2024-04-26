@@ -67,6 +67,8 @@ if __name__ == '__main__':
             if not file.endswith('.py'):
                 continue
             strat_number = int(file.split('_')[0][5:])
+            if strat_number != 3:
+                continue
             print('Getting metrics for Strategy {}'.format(strat_number))
             # Construct the module name from the file name
             module_name = file[:-3]  # Remove the .py extension

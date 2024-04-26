@@ -36,14 +36,14 @@ long_names = ['Total Return [%]', 'Max Drawdown [%]', 'Max Drawdown Duration',
        'Omega Ratio', 'Sortino Ratio']
 
 
-def time_delta_to_float(s, nancase=float('nan')):
+def time_delta_to_float(s, nancase=float('nan'), report_nans=True):
     #print(s, type(s), type(s)==str)
     
     try:
         assert(type(s) == str)
     except AssertionError:
-        print("Input {} isn't a string, returning {}".format(s, nancase))
-        #print(s == float('nan'))
+        if report_nans:
+            print("Input {} isn't a string, returning {}".format(s, nancase))
         return float('nan')
     
     days, _, rest = tuple(s.split())
@@ -85,8 +85,9 @@ def get_correlations(strat_name, pair, data_type='hourly', train_prop=(7,10)):
         train_metric = train.loc[metric]
         test_metric = test.loc[metric]
         if metric.split()[-1] == 'Duration':
-            train_metric = pd.Series(map(time_delta_to_float, train_metric))
-            test_metric = pd.Series(map(time_delta_to_float, test_metric))
+            dt_to_fl = lambda x: time_delta_to_float(x, report_nans=False)
+            train_metric = pd.Series(map(dt_to_fl, train_metric))
+            test_metric = pd.Series(map(dt_to_fl, test_metric))
         
         result[metric] = train_metric.corr(test_metric)
         
@@ -153,7 +154,7 @@ print(result)
 
 df = pd.DataFrame(columns=pairs)
 for pair in pairs:
-    correlations = get_correlations('strat3', pair)
+    correlations = get_correlations('strat4', pair)
     df[pair] = correlations
     
 df = df.loc[long_names]

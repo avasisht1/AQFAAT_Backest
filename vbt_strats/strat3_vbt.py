@@ -31,7 +31,7 @@ def avg_range(lows, highs, window):
 def avg_high(high, window):
     assert(isinstance(window, int) or isinstance(window, np.int64))
     high = pd.DataFrame(high)
-    avg_highs = high.rolling(window=window).mean()
+    avg_highs = high.rolling(window=window).max()
     assert(np.shape(avg_highs) == np.shape(high))
     
     return avg_highs
