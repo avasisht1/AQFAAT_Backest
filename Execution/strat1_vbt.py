@@ -91,7 +91,6 @@ def strategy1(low, closes, low_window, rsi_window, rsi_threshold, max_dim):
                     days_in_market[0] = 0
                 else: # curr_rsi <= rsi_threshold and days_in_market < max_dim
                     days_in_market[0] += 1
-
     
     return entries, exits
 
